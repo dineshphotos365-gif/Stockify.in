@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeoTrade - Trade</title>
+
+<link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+
+<body>
+<main class="main-content">
+
+<!-- HEADER -->
+<section class="page-header">
+    <h1 class="page-title">Trade</h1>
+    <p class="page-subtitle">Execute trades instantly</p>
+</section>
+
+<!-- BALANCE -->
+<section class="balance-section">
+    <div class="balance-card">
+        <div class="balance-label">Virtual Balance</div>
+        <div class="balance-amount" id="balance">₹100,000</div>
+        <span class="balance-change positive">+2.6%</span>
+    </div>
+    <!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <div class="nav-item active">Trade</div>
+  <div class="nav-item">Portfolio</div>
+  <div class="nav-item">Profile</div>
+</nav>
+</section>
+
+<!-- CHART -->
+<section class="candle-chart-section">
+<div class="chart-header">
+    <h2 class="chart-title">
+        <span id="chartTitle">RELIANCE</span>
+        <span id="timeframeLabel">1D</span>
+    </h2>
+
+    <div class="timeframe-selector">
+        <button class="timeframe-btn" data-sec="60">1m</button>
+        <button class="timeframe-btn" data-sec="300">5m</button>
+        <button class="timeframe-btn" data-sec="900">15m</button>
+        <button class="timeframe-btn" data-sec="3600">1h</button>
+        <button class="timeframe-btn active" data-sec="86400">1D</button>
+    </div>
+</div>
+
+<div id="tradingview_candle" class="candle-chart"></div>
+</section>
+
+<!-- LIVE STOCK LIST -->
+<section class="stock-list-section">
+<h2 class="section-title">Live Stocks</h2>
+
+<div class="stock-list">
+
+<div class="stock-item active" data-symbol="RELIANCE">
+<div class="stock-symbol">RELIANCE</div>
+<div class="stock-price">₹2945</div>
+</div>
+
+<div class="stock-item" data-symbol="TCS">
+<div class="stock-symbol">TCS</div>
+<div class="stock-price">₹4120</div>
+</div>
+
+<div class="stock-item" data-symbol="HDFCBANK">
+<div class="stock-symbol">HDFCBANK</div>
+<div class="stock-price">₹1675</div>
+</div>
+
+</div>
+</section>
+
+<!-- TRADE FORM -->
+<section class="trade-form-section">
+<form class="trade-form">
+<div class="form-row">
+<div class="form-group">
+<label>Quantity</label>
+<input type="number" class="form-input" id="qty" value="1">
+</div>
+
+<div class="form-group">
+<label>Price</label>
+<input type="number" class="form-input" id="tradePrice" readonly>
+</div>
+</div>
+
+<div class="form-actions">
+<button type="button" class="trade-button buy-button" id="buyBtn">BUY</button>
+<button type="button" class="trade-button sell-button" id="sellBtn">SELL</button>
+</div>
+</form>
+</section>
+
+</main>
+
+<script>
+/* ===============================
+   REALTIME ENGINE (UNCHANGED)
+================================ */
+
+let chart, series;
+let balance = 100000;
+let holdings = 0;
+
+let currentSymbol = "RELIANCE";
+let timeframe = 86400;
+let candle = null;
+let timer = null;
+
+const stockPrices = {
+    RELIANCE: 2945,
+    TCS: 4120,
+    HDFCBANK: 1675
+};
+
+window.onload = init;
+
+function init(){
+ chart = LightweightCharts.createChart(
+   document.getElementById("tradingview_candle"),
+   {
+     height: 360,
+     layout: {
+       background: { color: 'transparent' },
+       textColor: '#b8b8d9'
+     },
+     grid: {
+       vertLines: {
+         color: 'rgba(0,212,255,0.08)',
+         style: LightweightCharts.LineStyle.Dashed
+       },
+       horzLines: {
+         color: 'rgba(0,212,255,0.08)',
+         style: LightweightCharts.LineStyle.Dashed
+       }
+     },
+     timeScale: {
+       timeVisible: true,
+       secondsVisible: false,
+       rightBarStaysOnScroll: true,
+       borderColor: 'rgba(0,212,255,0.4)',
+       barSpacing: 8,          // ✅ CANDLES PAAS-PAAS
+       minBarSpacing: 4
+     },
+     rightPriceScale: {
+       borderColor: 'rgba(0,212,255,0.4)',
+       scaleMargins: {
+         top: 0.12,
+         bottom: 0.12
+       }
+     },
+     crosshair: {
+       mode: LightweightCharts.CrosshairMode.Normal
+     },
+     handleScroll: true,
+     handleScale: true
+   }
+ );
+
+ series = chart.addCandlestickSeries({
+   upColor: '#00ff88',
+   downColor: '#ff4766',
+   borderUpColor: '#00ff88',
+   borderDownColor: '#ff4766',
+   wickUpColor: '#00ff88',
+   wickDownColor: '#ff4766',
+   borderVisible: false,
+   priceLineVisible: true,
+   priceLineColor: '#ff4766'
+ });
+
+ loadHistory();
+ startRealtime();
+}
+
+/* ===== HISTORY ===== */
+function loadHistory(){
+ let data=[];
+ let now=Math.floor(Date.now()/1000);
+ let price=stockPrices[currentSymbol];
+
+ for(let i=50;i>0;i--){
+  let o=price;
+  let c=o+(Math.random()-0.5)*25;
+
+  data.push({
+   time: now - i*timeframe,
+   open:o,
+   high:Math.max(o,c)+5,
+   low:Math.min(o,c)-5,
+   close:c
+  });
+
+  price=c;
+ }
+
+ series.setData(data);
+ chart.timeScale().fitContent();
+}
+
+/* ===== REALTIME ===== */
+function startRealtime(){
+ if(timer) clearInterval(timer);
+
+ let now=Math.floor(Date.now()/1000);
+ let start=Math.floor(now/timeframe)*timeframe;
+ let base=stockPrices[currentSymbol];
+
+ candle={time:start,open:base,high:base,low:base,close:base};
+ series.update(candle);
+
+ timer=setInterval(()=>{
+  let now=Math.floor(Date.now()/1000);
+  let price=+(candle.close+(Math.random()-0.5)*6).toFixed(2);
+
+  if(now >= candle.time + timeframe){
+    candle={
+      time:Math.floor(now/timeframe)*timeframe,
+      open:price,
+      high:price,
+      low:price,
+      close:price
+    };
+  }else{
+    candle.close=price;
+    candle.high=Math.max(candle.high,price);
+    candle.low=Math.min(candle.low,price);
+  }
+
+  series.update(candle);
+  document.getElementById("tradePrice").value=price;
+ },1000);
+}
+
+/* ===== TIMEFRAME ===== */
+document.querySelectorAll(".timeframe-btn").forEach(btn=>{
+ btn.onclick=()=>{
+  document.querySelectorAll(".timeframe-btn").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  timeframe=+btn.dataset.sec;
+  document.getElementById("timeframeLabel").innerText=btn.innerText;
+  loadHistory();
+  startRealtime();
+ };
+});
+
+/* ===== STOCK ===== */
+document.querySelectorAll(".stock-item").forEach(item=>{
+ item.onclick=()=>{
+  document.querySelectorAll(".stock-item").forEach(i=>i.classList.remove("active"));
+  item.classList.add("active");
+  currentSymbol=item.dataset.symbol;
+  document.getElementById("chartTitle").innerText=currentSymbol;
+  loadHistory();
+  startRealtime();
+ };
+});
+
+/* ===== BUY SELL ===== */
+buyBtn.onclick=()=>{
+ let q=+qty.value;
+ let cost=q*candle.close;
+ if(cost>balance) return alert("Insufficient Balance");
+ balance-=cost;
+ holdings+=q;
+ updateBalance();
+};
+
+sellBtn.onclick=()=>{
+ let q=+qty.value;
+ if(q>holdings) return alert("Not enough shares");
+ balance+=q*candle.close;
+ holdings-=q;
+ updateBalance();
+};
+
+function updateBalance(){
+ document.getElementById("balance").innerText="₹"+balance.toFixed(2);
+}
+</script>
+
+</body>
+</html>
