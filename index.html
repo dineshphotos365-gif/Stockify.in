@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeoTrade - Trade</title>
+
+<link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+
+<body>
+<main class="main-content">
+
+<!-- HEADER -->
+<section class="page-header">
+    <h1 class="page-title">Trade</h1>
+    <p class="page-subtitle">Execute trades instantly</p>
+</section>
+
+<!-- BALANCE -->
+<section class="balance-section">
+    <div class="balance-card">
+        <div class="balance-label">Virtual Balance</div>
+        <div class="balance-amount" id="balance">₹100,000</div>
+    </div>
+</section>
+
+<!-- CHART -->
+<section class="candle-chart-section">
+<div class="chart-header">
+    <h2 class="chart-title">
+        <span id="chartTitle">RELIANCE</span>
+        <span id="timeframeLabel">1D</span>
+    </h2>
+
+    <div class="timeframe-selector">
+        <button class="timeframe-btn" data-sec="60">1m</button>
+        <button class="timeframe-btn" data-sec="300">5m</button>
+        <button class="timeframe-btn" data-sec="900">15m</button>
+        <button class="timeframe-btn" data-sec="3600">1h</button>
+        <button class="timeframe-btn active" data-sec="86400">1D</button>
+    </div>
+</div>
+
+<div id="tradingview_candle" class="candle-chart"></div>
+</section>
+
+<!-- 🔥 STOCK LIST WITH SEARCH -->
+<section class="stock-list-section">
+<h2 class="section-title">Live Stocks</h2>
+
+<div class="stock-container">
+<input type="text" id="searchStock" placeholder="🔍 Search stock...">
+
+<div class="stock-list" id="stockList"></div>
+</div>
+
+</section>
+
+<!-- TRADE FORM -->
+<section class="trade-form-section">
+<form class="trade-form">
+<div class="form-row">
+<div class="form-group">
+<label>Quantity</label>
+<input type="number" class="form-input" id="qty" value="1">
+</div>
+
+<div class="form-group">
+<label>Price</label>
+<input type="number" class="form-input" id="tradePrice" readonly>
+</div>
+</div>
+
+<div class="form-actions">
+<button type="button" class="trade-button buy-button" id="buyBtn">BUY</button>
+<button type="button" class="trade-button sell-button" id="sellBtn">SELL</button>
+</div>
+</form>
+</section>
+
+</main>
+
+<script>
+
+/* ===============================
+   🔥 STOCK LIST (100)
+================================ */
+const stocks = [
+"RELIANCE","TCS","INFY","HDFCBANK","ICICIBANK","SBIN","WIPRO","HCLTECH",
+"LT","AXISBANK","KOTAKBANK","BAJFINANCE","MARUTI","TITAN","ASIANPAINT",
+"ULTRACEMCO","ONGC","NTPC","POWERGRID","COALINDIA","ADANIPORTS",
+"ADANIENT","ADANIGREEN","ZOMATO","PAYTM","IRCTC","DMART","PIDILITIND",
+"BAJAJFINSV","HEROMOTOCO","EICHERMOT","TATAMOTORS","TATASTEEL",
+"TATAPOWER","JSWSTEEL","HINDALCO","VEDL","SUNPHARMA","DRREDDY",
+"CIPLA","DIVISLAB","APOLLOHOSP","TECHM","LTIM","MPHASIS",
+"NAUKRI","POLYCAB","DABUR","COLPAL","GODREJCP","MARICO","UBL",
+"VOLTAS","BOSCHLTD","SIEMENS","ABB","CUMMINSIND","ESCORTS",
+"ASHOKLEY","BHARTIARTL","IDEA","INDUSINDBK","PNB","BANKBARODA",
+"CANBK","FEDERALBNK","IDFCFIRSTB","AMBUJACEM","SHREECEM",
+"GRASIM","ACC","MOTHERSON","TVSMOTOR","BALKRISIND","MRF",
+"PAGEIND","TRENT","NYKAA","DELHIVERY","BLUEDART","GAIL",
+"IOC","BPCL","HPCL","IGL","MGL","PETRONET","ADANITRANS",
+"TATACONSUM","BRITANNIA","NESTLEIND","HAL","BEL","BHEL"
+];
+
+const stockList = document.getElementById("stockList");
+
+stocks.forEach((s,i)=>{
+ let price = (1000 + Math.random()*3000).toFixed(0);
+
+ stockList.innerHTML += `
+ <div class="stock-item ${i==0?'active':''}" data-symbol="${s}">
+   <div class="stock-symbol">${s}</div>
+   <div class="stock-price">₹${price}</div>
+ </div>`;
+});
+
+/* 🔍 SEARCH */
+document.getElementById("searchStock").addEventListener("input", function(){
+ let val = this.value.toLowerCase();
+ document.querySelectorAll(".stock-item").forEach(item=>{
+   item.style.display = item.innerText.toLowerCase().includes(val) ? "flex":"none";
+ });
+});
+
+/* ===============================
+   🔥 CHART + LOGIC (FIXED)
+================================ */
+
+let chart, series;
+let balance = 100000;
+let holdings = 0;
+
+let currentSymbol = "RELIANCE";
+let timeframe = 86400;
+let candle = null;
+let timer = null;
+
+window.onload = init;
+
+function init(){
+ chart = LightweightCharts.createChart(
+   document.getElementById("tradingview_candle"),
+   { height: 360 }
+ );
+
+ series = chart.addCandlestickSeries();
+
+ loadHistory();
+ startRealtime();
+}
+
+/* HISTORY */
+function loadHistory(){
+ let data=[];
+ let now=Math.floor(Date.now()/1000);
+ let price=2000;
+
+ for(let i=50;i>0;i--){
+  let o=price;
+  let c=o+(Math.random()-0.5)*25;
+
+  data.push({
+   time: now - i*timeframe,
+   open:o,
+   high:Math.max(o,c)+5,
+   low:Math.min(o,c)-5,
+   close:c
+  });
+
+  price=c;
+ }
+
+ series.setData(data);
+}
+
+/* ✅ PERFECT REALTIME */
+function startRealtime(){
+ if(timer) clearInterval(timer);
+
+ let now = Math.floor(Date.now()/1000);
+ let start = Math.floor(now / timeframe) * timeframe;
+
+ let basePrice = candle ? candle.close : 2000;
+
+ candle = {
+   time: start,
+   open: basePrice,
+   high: basePrice,
+   low: basePrice,
+   close: basePrice
+ };
+
+ series.update(candle);
+
+ timer = setInterval(()=>{
+  let now = Math.floor(Date.now()/1000);
+  let price = +(candle.close + (Math.random()-0.5)*6).toFixed(2);
+
+  if(now >= candle.time + timeframe){
+    candle = {
+      time: Math.floor(now / timeframe) * timeframe,
+      open: price,
+      high: price,
+      low: price,
+      close: price
+    };
+  } else {
+    candle.close = price;
+    candle.high = Math.max(candle.high, price);
+    candle.low = Math.min(candle.low, price);
+  }
+
+  series.update(candle);
+  document.getElementById("tradePrice").value = price;
+
+ },1000);
+}
+
+/* ✅ TIMEFRAME FIX */
+document.querySelectorAll(".timeframe-btn").forEach(btn=>{
+ btn.onclick=()=>{
+   document.querySelectorAll(".timeframe-btn").forEach(b=>b.classList.remove("active"));
+   btn.classList.add("active");
+
+   timeframe = +btn.dataset.sec;
+
+   document.getElementById("timeframeLabel").innerText = btn.innerText;
+
+   loadHistory();   // 🔥 history update
+   startRealtime(); // 🔥 realtime continue
+ };
+});
+
+/* STOCK CLICK */
+document.addEventListener("click", function(e){
+ if(e.target.closest(".stock-item")){
+   document.querySelectorAll(".stock-item").forEach(i=>i.classList.remove("active"));
+
+   let item = e.target.closest(".stock-item");
+   item.classList.add("active");
+
+   currentSymbol = item.dataset.symbol;
+   document.getElementById("chartTitle").innerText=currentSymbol;
+
+   loadHistory();
+   startRealtime();
+ }
+});
+
+/* BUY SELL */
+buyBtn.onclick=()=>{
+ let q=+qty.value;
+ let cost=q*candle.close;
+ if(cost>balance) return alert("Low Balance");
+
+ balance-=cost;
+ holdings+=q;
+ updateBalance();
+};
+
+sellBtn.onclick=()=>{
+ let q=+qty.value;
+ if(q>holdings) return alert("No shares");
+
+ balance+=q*candle.close;
+ holdings-=q;
+ updateBalance();
+};
+
+function updateBalance(){
+ document.getElementById("balance").innerText="₹"+balance.toFixed(2);
+}
+
+</script>
+
+
+
+</body>
+</html>
